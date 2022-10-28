@@ -1,1 +1,0 @@
-Im trying to test if I can add things in this directory but stil ignore other things in this directory.

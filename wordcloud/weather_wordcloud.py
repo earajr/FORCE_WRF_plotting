@@ -20,7 +20,8 @@ def cleaning_tweets(t):
     result_words = [x for x in words if len(x) > 2]
     return (" ".join(result_words)).strip()
 
-keys_dir="/home/earajr/wordcloud/twitter/.keys"
+FORCE_WRF_plotting=os.getenv('FORCE_WRF_plotting')
+keys_dir=FORCE_WRF_plotting+"/wordcloud/twitter/.keys"
 
 API_key = open(keys_dir+"/API_key", 'r').read().strip()
 API_key_secret = open(keys_dir+"/API_key_secret", 'r').read().strip()
@@ -78,7 +79,7 @@ from wordcloud import WordCloud, STOPWORDS
 import matplotlib.pyplot as plt
 
 stopwords = set(STOPWORDS)
-stopwords.update(["ukweather", "temp", "across", "parts", "today", "latest", "many", "rather", "week", "issue", "issued", "eng", "see", "past", "will", "around", "areas", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "details", "met" "office", "metofficecop27", "matt"])
+stopwords.update(["ukweather", "temp", "across", "parts", "today", "latest", "many", "rather", "week", "issue", "issued", "eng", "see", "past", "will", "around", "areas", "monday", "mon", "tuesday", "tues", "wednesday", "wed", "thursday", "thurs", "friday", "fri", "saturday", "sat", "sunday", "details", "met" "office", "metofficecop27", "matt", "simon", "x", "xx", "xxx", "netweather", "dot"])
 
 # Rectangular word cloud
 
@@ -98,3 +99,4 @@ plt.axis("off")
 plt.savefig("Weather_wordcloud.png")
 
 os.system("convert Weather_wordcloud.png -trim Weather_wordcloud.png")
+os.system("rm ./"+csv_name+".csv")
