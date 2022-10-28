@@ -9,8 +9,11 @@ import xarray as xr
 import os
 import ninept_smoother
 import calc_gradient
+import calc_divergence
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from pint import UnitRegistry
+from skimage.morphology import skeletonize, thin
+from matplotlib import colors
 
 from wrf import (getvar, interplevel, vertcross, CoordPair, ALL_TIMES, to_np, get_cartopy, latlon_coords, cartopy_xlim, cartopy_ylim, extract_times, extract_global_attrs)
 
@@ -31,14 +34,58 @@ for i in np.arange(0, num_times, 1):
 
 # Read 2m temperature, lats and lons
 
+   pres = getvar(wrf_in, 'pressure', timeidx=i)
    T2 = getvar(wrf_in, 'T2', timeidx=i)
-   lats, lons = latlon_coords(T2)
+   tc = getvar(wrf_in, 'tc', timeidx=i)
+   theta_e = getvar(wrf_in, 'theta_e', timeidx=i)
+   lats, lons = latlon_coords(tc)
  
+# Interpolate temperature to 850 hPa
+
+   tc_850 = interplevel(tc, pres, 850.0)
+   theta_e_850 = interplevel(theta_e, pres, 850.0)
+
+# Calculate theta_w_850 using the Scheid method
+
+   theta_w_850 = 45.114 - (51.489*(273.15/theta_e_850)**3.504)
+
 # Calculate T2 gradient
 
    T2_gradient = calc_gradient.calc_gradient(T2, to_np(lats), to_np(lons))
    T2_gradient_mag_kpm = np.sqrt((T2_gradient[0]**2.0) + (T2_gradient[1]**2.0))
    T2_gradient_mag = T2_gradient_mag_kpm.to("kelvin / kilometer")
+
+# Calculate tc_850 gradient
+
+   tc_850_gradient = calc_gradient.calc_gradient(tc_850, to_np(lats), to_np(lons))
+   tc_850_gradient_mag_kpm = np.sqrt((tc_850_gradient[0]**2.0) + (tc_850_gradient[1]**2.0))
+   tc_850_gradient_mag = tc_850_gradient_mag_kpm.to("kelvin / kilometer")
+
+# Calculate theta_w_gradient
+
+   theta_w_850_gradient = calc_gradient.calc_gradient(theta_w_850, to_np(lats), to_np(lons))
+   theta_w_850_gradient_div = calc_divergence.calc_divergence(theta_w_850_gradient[0], theta_w_850_gradient[1], to_np(lats), to_np(lons))
+   theta_w_850_gradient_mag =1000.0*(np.sqrt((theta_w_850_gradient[0]**2.0) + (theta_w_850_gradient[1]**2.0)))
+
+   front_step1 = calc_gradient.calc_gradient(tc_850, to_np(lats), to_np(lons))
+   front_step2 = (np.sqrt((front_step1[0]**2.0) + (front_step1[1]**2.0)))
+   front_step3 = front_step2.to("kelvin / kilometer")
+ #  front_step3 = ninept_smoother.smth9(front_step3, 0.5, 0.25)
+ #  front_step3 = ninept_smoother.smth9(front_step3, 0.5, 0.25)
+ #  front_step3 = ninept_smoother.smth9(front_step3, 0.5, 0.25)
+   front_step3 = ninept_smoother.smth9(front_step3, 0.5, 0.25)
+   front_step4 = np.where(front_step3 >= 0.015, front_step3, 0.0)
+   front_step4 = ninept_smoother.smth9(front_step4, 0.5, 0.25)
+   front_step4 = ninept_smoother.smth9(front_step4, 0.5, 0.25)
+   front_step4 = ninept_smoother.smth9(front_step4, 0.5, 0.25)
+   front_step4 = ninept_smoother.smth9(front_step4, 0.5, 0.25)
+   front_step5 = np.where(front_step4 >= 0.01, 1.0, 0.0)
+   front_step6 = np.where(thin(front_step5) == True, 1, 0)
+
+#  front_step3 = calc_gradient.calc_gradient(front_step2, to_np(lats), to_np(lons))
+#  front_step4 = calc_divergence.calc_divergence(front_step3[0], front_step3[1], to_np(lats), to_np(lons))
+
+#   theta_w_850_gradient_mag = theta_w_850_gradient_mag_kpm.to("kelvin / kilometer")
 
 ## Apply smoothing multiple times to create more user friendly image
 #   geop_height_200 = ninept_smoother.smth9(geop_height_200, 0.5, 0.25)
@@ -55,9 +102,14 @@ for i in np.arange(0, num_times, 1):
    ax.coastlines(linewidth=0.5)
 
 # Plot geopotential height at 10 dam intervals
-   T2_gradient_lvl = np.arange(0.0, 0.5, 0.01)
-   plt.contourf(lons, lats, T2_gradient_mag, levels=T2_gradient_lvl, cmap='gray_r', transform=crs.PlateCarree())
-#  plt.contour(lons, lats, geop_height_200, levels=geop_height_200_lvl, colors='black', transform=crs.PlateCarree())
+   T2 = T2 -273.15
+   T2_lvl = np.arange(-10.0, 35.0, 1.0)
+   front_lvl = np.arange(0.75, 1.75, 0.5)
+#   theta_w_850_gradient_mag_levs = np.arange(0.0, 0.05, 0.001)
+#   theta_w_850_gradient_div_levs = np.arange(-0.5, 0.5, 0.02)
+#   theta_w_850_levs = np.arange(0.0, 15.0, 0.25)
+   plt.contourf(lons, lats, T2, levels=T2_lvl, cmap='viridis', transform=crs.PlateCarree())
+   plt.contourf(lons, lats, front_step6, levels=front_lvl, linewidths=2, cmap=colors.ListedColormap([(0,0,0,0),(0,0,0,1)]), transform=crs.PlateCarree())
 
 # Identify whether domain is portrait or landscape
 
@@ -106,5 +158,5 @@ for i in np.arange(0, num_times, 1):
 #   ax.quiver(to_np(lons[::thin[0],::thin[1]]), to_np(lats[::thin[0],::thin[1]]), to_np(u_200[::thin[0],::thin[1]]), to_np(v_200[::thin[0],::thin[1]]), pivot='middle', transform=crs.PlateCarree())
 
 # Save image 
-   plt.savefig('front_identification.png', bbox_inches='tight')
+   plt.savefig('fronts.png', bbox_inches='tight')
 
